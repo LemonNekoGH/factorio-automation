@@ -112,16 +112,19 @@ remote.add_interface("factorio_tasks",
         return true
     end,
     
-    mine_entity = function(entity_type, entity_name)
+    mine_entity = function(entity_type, entity_name, mine_count)
         if player_state.task_state ~= TASK_STATES.IDLE then
             log("[AUTOMATE] Cannot start mine_entity task: Player is not idle")
             return false
         end
+
+        mine_count = mine_count or 1
         log("[AUTOMATE] New mine_entity task: " .. entity_type .. ", " .. entity_name)
         player_state.task_state = TASK_STATES.MINING
         player_state.parameters = {
             entity_type = entity_type,
-            entity_name = entity_name
+            entity_name = entity_name,
+            remaining_mines = mine_count -- 新增字段，用于记录剩余挖掘次数
         }
     end,
 
@@ -306,9 +309,18 @@ script.on_event(defines.events.on_script_path_request_finished, function(event)
 end)
 
 script.on_event(defines.events.on_player_mined_entity, function(event)
-    log("[AUTOMATE] Entity mined, resetting to IDLE state")
-    player_state.task_state = TASK_STATES.IDLE
-    player_state.parameters = {}
+    if player_state.task_state == TASK_STATES.MINING then
+        -- 减少剩余挖掘次数
+        player_state.parameters.remaining_mines = player_state.parameters.remaining_mines - 1
+        log("[AUTOMATE] Mining completed. Remaining mines: " .. player_state.parameters.remaining_mines)
+
+        if player_state.parameters.remaining_mines <= 0 then
+            -- 挖掘任务完成
+            log("[AUTOMATE] Mining task complete, switching to IDLE state")
+            player_state.task_state = TASK_STATES.IDLE
+            player_state.parameters = {}
+        end
+    end
 end)
 
 script.on_event(defines.events.on_tick, function(event)
